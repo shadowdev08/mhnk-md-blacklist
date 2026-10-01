@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ตรวจสอบและจัดการรายชื่อแบล็คลิส</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #171a21; --border: #2a2e38; --text: #e8e9ec;
+    --muted: #9098a8; --accent: #ef4444; --accent2: #22c55e; --accent3: #6b7cff;
+    --input-bg: #1c1f27;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6f8; --card: #ffffff; --border: #e3e5ea; --text: #14161a;
+      --muted: #6b7280; --input-bg: #f0f1f4;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #171a21; --border: #2a2e38; --text: #e8e9ec;
+    --muted: #9098a8; --input-bg: #1c1f27;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Sarabun", "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex; justify-content: center;
+    padding-left: 16px; padding-right: 16px;
+  }
+  .wrap { width: 100%; max-width: 620px; padding: 28px 0 60px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; text-align: center; }
+  p.sub { color: var(--muted); text-align: center; margin: 0 0 20px; font-size: 0.88rem; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; background: var(--input-bg);
+    border-radius: 12px; padding: 4px; border: 1px solid var(--border); }
+  .tab-btn { flex: 1; padding: 10px; border: none; background: transparent; color: var(--muted);
+    border-radius: 9px; font-size: 0.92rem; cursor: pointer; font-family: inherit; }
+  .tab-btn.active { background: var(--accent3); color: #fff; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .search-box { display: flex; gap: 8px; margin-bottom: 20px; }
+  input[type="text"] {
+    flex: 1; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--input-bg); color: var(--text); font-size: 1rem; outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent3); }
+
+  .result { border-radius: 14px; padding: 20px; border: 1px solid var(--border);
+    background: var(--card); min-height: 80px; display: none; }
+  .result.show { display: block; }
+  .verdict { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .verdict.hit { color: var(--accent); }
+  .verdict.clear { color: var(--accent2); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot.hit { background: var(--accent); }
+  .dot.clear { background: var(--accent2); }
+  .categories { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .cat-tag { font-size: 0.85rem; color: var(--muted); background: var(--input-bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .cat-tag b { color: var(--text); }
+  .empty-hint { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 20px 0; }
+  .stats { margin-top: 24px; text-align: center; color: var(--muted); font-size: 0.8rem; }
+
+  /* manage panel */
+  .manage-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  select {
+    padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--input-bg); color: var(--text); font-size: 0.92rem; font-family: inherit;
+  }
+  .btn {
+    padding: 12px 16px; border-radius: 10px; border: none; background: var(--accent3);
+    color: #fff; font-size: 0.92rem; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
+  .btn.secondary { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: var(--accent); }
+  .btn:active { opacity: 0.85; }
+
+  .new-cat { display: flex; gap: 8px; margin: 16px 0; }
+  .new-cat input { flex: 1; }
+
+  .cat-block { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 14px; overflow: hidden; background: var(--card); }
+  .cat-head { padding: 12px 14px; font-weight: 600; font-size: 0.92rem; background: var(--input-bg);
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .cat-head .count { color: var(--muted); font-weight: 400; font-size: 0.82rem; }
+  .name-list { padding: 8px 14px; display: flex; flex-direction: column; }
+  .name-item { display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+  .name-item:last-child { border-bottom: none; }
+  .name-item .del { color: var(--accent); cursor: pointer; font-size: 0.82rem; padding: 4px 8px; flex-shrink: 0; }
+  .no-names { color: var(--muted); font-size: 0.85rem; padding: 10px 0; text-align: center; }
+
+  .bottom-actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .bottom-actions .btn { flex: 1; }
+  .toast {
+    position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%;
+    transform: translateX(-50%); background: var(--card); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 18px; border-radius: 10px; font-size: 0.85rem;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ตรวจสอบรายชื่อแบล็คลิส</h1>
+  <p class="sub">ค้นหาและจัดการรายชื่อได้ในที่เดียว</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="search">ค้นหา</button>
+    <button class="tab-btn" data-tab="manage">จัดการรายชื่อ</button>
+  </div>
+
+  <div id="searchPanel" class="panel active">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="พิมพ์ชื่อที่ต้องการค้นหา..." autocomplete="off">
+    </div>
+    <div id="result" class="result"></div>
+    <div id="emptyHint" class="empty-hint">ยังไม่ได้ค้นหา — พิมพ์ชื่อด้านบนเพื่อเริ่มตรวจสอบ</div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div id="managePanel" class="panel">
+    <div class="manage-row">
+      <select id="catSelect"></select>
+      <input type="text" id="newNameInput" placeholder="พิมพ์ชื่อที่ต้องการเพิ่ม..." style="flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); font-size:0.92rem;">
+      <button class="btn" id="addNameBtn">เพิ่ม</button>
+    </div>
+    <div class="new-cat">
+      <input type="text" id="newCatInput" placeholder="ชื่อหมวดใหม่...">
+      <button class="btn secondary" id="addCatBtn">เพิ่มหมวด</button>
+    </div>
+
+    <div id="catList"></div>
+
+    <div class="bottom-actions">
+      <button class="btn secondary" id="exportBtn">ส่งออกไฟล์สำรอง (.json)</button>
+      <button class="btn secondary" id="importBtn">นำเข้าไฟล์สำรอง</button>
+      <button class="btn danger" id="resetBtn">รีเซ็ตเป็นค่าเริ่มต้น</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SEED_DATA = {"รายชื่อผู้ที่จะไม่ทำการรักษา": ["Adum Rumto", "Asdas Tier", "Atom Godfather", "Aung Lubjub", "Bam Sian", "Bank Golum", "Benwintz Demowatsud", "Beta Diwa", "Blue Diff", "Brght Brght", "Boob Lexy", "Charon Uzi", "Chathai Quinn", "Chicky Lover", "Darby Tosny", "Diddy Keetak", "Dot Hum", "Eszotus Yaksha", "Glass Redsmoc", "Gogensesne Lahuyater", "Hana Werrine", "Hope Lexy", "Jack Kwon", "Jcboyz Dearquiz", "Jeff Whatever", "Jimin Alot", "Joh Sunset", "Jonathan Jordy", "Jone Usa", "Jonny hardi", "Jor Han", "Juk Vongolay", "Kaka Lonnza", "Kamen Samueto", "Kevin Zeng", "khaoniao manuang", "Kirito Kung", "Koby Smoke", "Koman Coconut", "Lilin Quanysve", "Mid Darm", "Mike Rutherford", "Miko Attack", "Misschet Est", "Moon Luvterwholedays", "Mynameissimon lamfkr", "New Rorraia", "Nojin Notoru", "Nongyu Badz", "paperrex Jinggg", "Paradin Soisanan", "Peem Winterfell", "Pten Inwza", "Ratty Ratty", "Roys Jaisungma", "Rrisuka Kill", "Sarutobi Kanugi", "Seeuporn See", "Sek Magicmushrooms", "Sexme Leesor", "Shiro Constantin", "Sofia Kongtrae", "Sprin Swacdsfg", "Taem Taem", "Tarin Swin", "Teemo Homesix", "Thanakorn Piwon", "Tik Tok", "Toy Ambrosius", "Tuangok Ozr", "Varen Nofake", "Wawa Sowow", "Williamn Tennyson", "Wisely Wisely", "xtar starflex"], "รายชื่อบุคคลที่โดนบิล x2": ["Alice Dernraeng", "Devil Valentgod", "Dukduan Zeelaxtuna", "kaikao maijumdip", "Ris Evo", "Vess Leonse"], "รายชื่อ Family/ Gang/ MC ที่โดนบิล x2": ["Family : Lonewolf", "Gang   : [RS] Runsus", "Gang   : [VG] Venguard"], "รายชื่อบุคคลที่โดนบิล x4": ["Sayhi Diamondonsnow"]};
+const STORAGE_KEY = 'blacklistData_v1';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(SEED_DATA));
+}
+
+function saveData(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showToast('บันทึกไม่สำเร็จ (พื้นที่จัดเก็บเต็มหรือถูกบล็อก)');
+  }
+}
+
+let DATA = loadData();
+
+function normalize(s) {
+  return String(s).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab + 'Panel').classList.add('active');
+    if (btn.dataset.tab === 'manage') renderManage();
+  });
+});
+
+/* ---------- search ---------- */
+const input = document.getElementById('searchInput');
+const resultEl = document.getElementById('result');
+const emptyHint = document.getElementById('emptyHint');
+const statsEl = document.getElementById('stats');
+
+function buildIndex() {
+  const idx = [];
+  let total = 0;
+  for (const [category, names] of Object.entries(DATA)) {
+    for (const name of names) {
+      idx.push({ name, category, norm: normalize(name) });
+      total++;
+    }
+  }
+  return { idx, total };
+}
+
+function updateStats() {
+  const { total } = buildIndex();
+  statsEl.textContent = `ฐานข้อมูลทั้งหมด ${total} รายชื่อ ใน ${Object.keys(DATA).length} หมวด`;
+}
+
+function search(query) {
+  const q = normalize(query);
+  if (!q) return [];
+  const { idx } = buildIndex();
+  return idx.filter(item => item.norm.includes(q));
+}
+
+function renderSearch(query) {
+  if (!query.trim()) {
+    resultEl.classList.remove('show');
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+  resultEl.classList.add('show');
+
+  const matches = search(query);
+
+  if (matches.length === 0) {
+    resultEl.innerHTML = `
+      <div class="verdict clear"><span class="dot clear"></span>ไม่ติดแบล็คลิส</div>
+      <div style="color:var(--muted); font-size:0.85rem;">ไม่พบชื่อ "${escapeHtml(query)}" ในรายการใด ๆ</div>
+    `;
+    return;
+  }
+
+  const byCat = {};
+  for (const m of matches) {
+    if (!byCat[m.category]) byCat[m.category] = [];
+    byCat[m.category].push(m.name);
+  }
+
+  let html = `<div class="verdict hit"><span class="dot hit"></span>ติดแบล็คลิส</div><div class="categories">`;
+  for (const [cat, names] of Object.entries(byCat)) {
+    const uniqueNames = [...new Set(names)];
+    html += `<div class="cat-tag"><b>${escapeHtml(cat)}</b><br>${uniqueNames.map(escapeHtml).join(', ')}</div>`;
+  }
+  html += `</div>`;
+  resultEl.innerHTML = html;
+}
+
+input.addEventListener('input', e => renderSearch(e.target.value));
+
+/* ---------- manage ---------- */
+const catSelect = document.getElementById('catSelect');
+const newNameInput = document.getElementById('newNameInput');
+const newCatInput = document.getElementById('newCatInput');
+const catList = document.getElementById('catList');
+
+function renderCatSelect() {
+  catSelect.innerHTML = Object.keys(DATA).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+}
+
+function renderManage() {
+  renderCatSelect();
+  catList.innerHTML = '';
+  for (const [cat, names] of Object.entries(DATA)) {
+    const block = document.createElement('div');
+    block.className = 'cat-block';
+    const uniqueNames = [...new Set(names)];
+    block.innerHTML = `
+      <div class="cat-head">
+        <span>${escapeHtml(cat)} <span class="count">(${uniqueNames.length})</span></span>
+        <span class="del" data-del-cat="${escapeHtml(cat)}">ลบหมวดนี้</span>
+      </div>
+      <div class="name-list">
+        ${uniqueNames.length === 0
+          ? '<div class="no-names">ยังไม่มีรายชื่อในหมวดนี้</div>'
+          : uniqueNames.map(n => `
+            <div class="name-item">
+              <span>${escapeHtml(n)}</span>
+              <span class="del" data-del-name="${escapeHtml(n)}" data-del-cat2="${escapeHtml(cat)}">ลบ</span>
+            </div>`).join('')
+        }
+      </div>
+    `;
+    catList.appendChild(block);
+  }
+
+  catList.querySelectorAll('[data-del-cat]').forEach(el => {
+    el.addEventListener('click', () => {
+      const cat = el.getAttribute('data-del-cat');
+      if (confirm(`ลบหมวด "${cat}" ทั้งหมด?`)) {
+        delete DATA[cat];
+        saveData(DATA);
+        renderManage();
+        updateStats();
+        showToast('ลบหมวดแล้ว');
+      }
+    });
+  });
+  catList.querySelectorAll('[data-del-name]').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.getAttribute('data-del-name');
+      const cat = el.getAttribute('data-del-cat2');
+      DATA[cat] = DATA[cat].filter(n => n !== name);
+      saveData(DATA);
+      renderManage();
+      updateStats();
+      showToast('ลบรายชื่อแล้ว');
+    });
+  });
+}
+
+document.getElementById('addNameBtn').addEventListener('click', () => {
+  const cat = catSelect.value;
+  const name = newNameInput.value.trim();
+  if (!cat) { showToast('ยังไม่มีหมวดหมู่ กรุณาเพิ่มหมวดก่อน'); return; }
+  if (!name) { showToast('กรุณาพิมพ์ชื่อ'); return; }
+  if (!DATA[cat].some(n => normalize(n) === normalize(name))) {
+    DATA[cat].push(name);
+    saveData(DATA);
+    renderManage();
+    updateStats();
+    showToast('เพิ่มรายชื่อแล้ว');
+  } else {
+    showToast('มีชื่อนี้อยู่แล้วในหมวดนี้');
+  }
+  newNameInput.value = '';
+  newNameInput.focus();
+});
+
+newNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addNameBtn').click(); });
+
+document.getElementById('addCatBtn').addEventListener('click', () => {
+  const cat = newCatInput.value.trim();
+  if (!cat) { showToast('กรุณาพิมพ์ชื่อหมวด'); return; }
+  if (DATA[cat]) { showToast('มีหมวดนี้อยู่แล้ว'); return; }
+  DATA[cat] = [];
+  saveData(DATA);
+  renderManage();
+  updateStats();
+  newCatInput.value = '';
+  showToast('เพิ่มหมวดแล้ว');
+});
+
+newCatInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addCatBtn').click(); });
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm('รีเซ็ตรายชื่อทั้งหมดกลับไปเป็นค่าเริ่มต้นจากไฟล์ตารางล่าสุด? การแก้ไขทั้งหมดจะหายไป')) {
+    DATA = JSON.parse(JSON.stringify(SEED_DATA));
+    saveData(DATA);
+    renderManage();
+    updateStats();
+    showToast('รีเซ็ตเรียบร้อย');
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'blacklist_backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('ส่งออกไฟล์แล้ว');
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad format');
+      DATA = parsed;
+      saveData(DATA);
+      renderManage();
+      updateStats();
+      showToast('นำเข้าไฟล์สำเร็จ');
+    } catch (err) {
+      showToast('ไฟล์ไม่ถูกต้อง นำเข้าไม่สำเร็จ');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ---------- init ---------- */
+renderCatSelect();
+updateStats();
+</script>
+</body>
+</html>
